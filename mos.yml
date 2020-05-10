@@ -1,0 +1,44 @@
+author: Rohit Lal Chandani <rlchandani@gmail.com>
+description: Coded in JS - Google IOT connected Smart Plug
+# arch: PLATFORM
+version: 1.0
+manifest_version: 2020-01-29
+libs_version: ${mos.version}
+modules_version: ${mos.version}
+mongoose_os_version: ${mos.version}
+
+config_schema:
+  - ["mqtt.server", "iot.eclipse.org:1883"]
+  - ["i2c.enable", true]
+  - ["dash.enable", true]
+  - ["dash.token", "Ud1FrY67zQRfL13p2X2jAw"]
+  - ["wifi.sta.enable", true]
+  - ["wifi.sta.ssid", "LittleCedar"]
+  - ["wifi.sta.pass", "9000280825"]
+  - ["board.plug1", "o", {"title": "Plug S1 state"}]
+  - ["board.plug1.relay", "s", "S2", {"title": "Plug S1 pin"}]
+  - ["board.plug1.pin", "i", 16, {"title": "Plug S1 pin"}]
+  - ["board.plug1.pull_up", "b", true, {"title": "Plug S1 pull-up"}]
+  - ["board.plug2", "o", {"title": "Plug S2 state"}]
+  - ["board.plug2.relay", "s", "S3", {"title": "Plug S2 pin"}]
+  - ["board.plug2.pin", "i", 14, {"title": "Plug S2 pin"}]
+  - ["board.plug2.pull_up", "b", true, {"title": "Plug S2 pull-up"}]
+  - ["board.plug3", "o", {"title": "Plug S3 state"}]
+  - ["board.plug3.relay", "s", "S4", {"title": "Plug S3 pin"}]
+  - ["board.plug3.pin", "i", 12, {"title": "Plug S3 pin"}]
+  - ["board.plug3.pull_up", "b", true, {"title": "Plug S3 pull-up"}]
+  - ["board.plug4", "o", {"title": "Plug S4 state"}]
+  - ["board.plug4.relay", "s", "S5", {"title": "Plug S4 pin"}]
+  - ["board.plug4.pin", "i", 13, {"title": "Plug S4 pin"}]
+  - ["board.plug4.pull_up", "b", true, {"title": "Plug S4 pull-up"}]
+  - ["config_version", "i", 0, {"title": "Configuration Version pushed from Google Cloud IOT"}]
+
+tags:
+  - js
+
+filesystem:
+  - fs
+
+libs:
+  - origin: https://github.com/mongoose-os-libs/boards
+  - origin: https://github.com/mongoose-os-libs/js-demo-bundle
