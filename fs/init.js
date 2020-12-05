@@ -12,7 +12,8 @@ let KEYWORD_RELAY = '.relay';
 let KEYWORD_PULL_UP = '.pull_up';
 let KEYWORD_CONFIG_VERSION = 'config_version';
 
-let shadowState = { btnCount: 0, uptime: 0 };
+let shadowState = { btnCount: 0, config_version: 0, board: {}, uptime: 0 };
+let shadowEnabled = Cfg.get('dash.enable');
 let btn = Cfg.get('board.btn1.pin');  // Built-in board button
 let led = Cfg.get('board.led1.pin');  // Built-in board led
 let configTopic = '/devices/' + Cfg.get('device.id') + '/config';
@@ -67,25 +68,27 @@ restorePlugStateUsingConfig();
  * Sample: {"config_version":1,"config":{"board":{"plug4":{"relay":"S5","pull_up":true,"pin":13},"plug3":{"relay":"S4","pull_up":true,"pin":12},"plug2":{"relay":"S3","pull_up":true,"pin":14},"plug1":{"relay":"S2","pull_up":true,"pin":16}}}}
  * pull_up = true mean switch is OFF
  */
-MQTT.sub(configTopic, function(conn, configTopic, msg) {
+MQTT.sub(configTopic, function (conn, configTopic, msg) {
   print('Topic:', configTopic, 'Message:', msg);
 
-  if('' !== StringUtils.trim(msg)) {
+  if ('' !== StringUtils.trim(msg)) {
     // Save new requested plug new state in CONFIG
     let configObj = JSON.parse(StringUtils.trim(msg));
     print(JSON.stringify(configObj));
     if (configObj[KEYWORD_CONFIG_VERSION] > Cfg.get(KEYWORD_CONFIG_VERSION)) {
       Cfg.set(configObj.config);
-      Cfg.set({config_version: configObj[KEYWORD_CONFIG_VERSION]});
+      Cfg.set({ config_version: configObj[KEYWORD_CONFIG_VERSION] });
       print("Config version saved on Device")
       restorePlugStateUsingConfig();
     } else {
       print("Config version already on Device")
     }
 
-    // Updating Shadow with board plugs states from request
-    shadowState.config_version = configObj[KEYWORD_CONFIG_VERSION]
-    shadowState.board = configObj.config.board;
+    if (shadowEnabled) {
+      // Updating Shadow with board plugs states from request
+      shadowState.config_version = configObj[KEYWORD_CONFIG_VERSION]
+      shadowState.board = configObj.config.board;
+    }
   }
 }, null);
 
@@ -95,30 +98,27 @@ MQTT.sub(configTopic, function(conn, configTopic, msg) {
  * Sample: {"plugId":"board.plug1", "plugState": false}
  * plugState = true mean switch is OFF
  */
-MQTT.sub(commandsTopic, function(conn, commandsTopic, msg) {
-    print('Topic:', commandsTopic, 'Message:', msg);
+MQTT.sub(commandsTopic, function (conn, commandsTopic, msg) {
+  print('Topic:', commandsTopic, 'Message:', msg);
 
-    // Update requested plug state as per command
-    let msgObj = JSON.parse(msg);
-    GPIO.write(Cfg.get(msgObj.plugId + KEYWORD_PIN), msgObj.plugState);
+  // Update requested plug state as per command
+  let msgObj = JSON.parse(msg);
+  GPIO.write(Cfg.get(msgObj.plugId + KEYWORD_PIN), msgObj.plugState);
 
-    // Save new requested plug new state in CONFIG
-    let newState = {};
-    newState[msgObj.plugId + KEYWORD_PULL_UP] = msgObj.plugState;
-    Cfg.set(newState);
+  // Save new requested plug new state in CONFIG
+  let newState = {};
+  newState[msgObj.plugId + KEYWORD_PULL_UP] = msgObj.plugState;
+  Cfg.set(newState);
 
-    // Update IOT State using msg from Command topic
-    print("Sending MQTT message");
-    print("--------------------");
-    print(stateTopic, '->', msg);
-    print("--------------------");
-    MQTT.pub(stateTopic, msg, 1);
-    print('Acknowledgement send to IOT device State');
-
-    // Updating Shadow with plug state from request
-    let result = StringUtils.split(msgObj.plugId, '.', true);
-    shadowState[result[0]][result[1]]['pull_up'] = msgObj.plugState; 
-  },
+  // NOTE: DO NOT ENABLE THIS IN PROD, THIS RESULTS IN MQTT DISCONNECT
+  // Update IOT State using msg from Command topic
+  // print("Sending MQTT message");
+  // print("--------------------");
+  // print(stateTopic, '->', msg);
+  // print("--------------------");
+  // MQTT.pub(stateTopic, msg, 1);
+  // print('Acknowledgement send to IOT device State');
+},
   null
 );
 
@@ -126,9 +126,10 @@ MQTT.sub(commandsTopic, function(conn, commandsTopic, msg) {
  * Updating Device Shadow State on mdash.net
  * Updating Device online status to True when connected to Cloud
  */
-Event.on(Event.CLOUD_CONNECTED, function() {
-  shadowState.online = true;
-  Shadow.update(0, shadowState);
+Event.on(Event.CLOUD_CONNECTED, function () {
+  if (shadowEnabled) {
+    shadowState.online = true;
+  }
   print("Event Cloud Connected")
 }, null);
 
@@ -136,9 +137,10 @@ Event.on(Event.CLOUD_CONNECTED, function() {
  * Updating Device Shadow State on mdash.net
  * Updating Device online status to False when disconnected from Cloud
  */
-Event.on(Event.CLOUD_DISCONNECTED, function() {
-  shadowState.online = false;
-  Shadow.update(0, shadowState);
+Event.on(Event.CLOUD_DISCONNECTED, function () {
+  if (shadowEnabled) {
+    shadowState.online = false;
+  }
   print("Event Cloud Disconnected")
 }, null);
 
@@ -154,29 +156,15 @@ if (btn >= 0) {
     btnPull = GPIO.PULL_DOWN;
     btnEdge = GPIO.INT_EDGE_POS;
   }
-  GPIO.set_button_handler(btn, btnPull, btnEdge, 20, function() {
-    shadowState.btnCount += 1;
+  GPIO.set_button_handler(btn, btnPull, btnEdge, 20, function () {
+    if (shadowEnabled) {
+      shadowState.btnCount += 1;
+    }
     print("Button pressed!!!")
     restorePlugStateUsingConfig();
 
-    // Rebuilding Config Object
-    let boardConfig = {config_version : shadowState.config_version, config : {board : shadowState.board}};
-    boardConfig.config.board.plug1.pin = Cfg.get(plug1 + KEYWORD_PIN);
-    boardConfig.config.board.plug1.pull_up = Cfg.get(plug1 + KEYWORD_PULL_UP);
-    boardConfig.config.board.plug1.relay = Cfg.get(plug1 + KEYWORD_RELAY);
-    boardConfig.config.board.plug2.pin = Cfg.get(plug2 + KEYWORD_PIN);
-    boardConfig.config.board.plug2.pull_up = Cfg.get(plug2 + KEYWORD_PULL_UP);
-    boardConfig.config.board.plug2.relay = Cfg.get(plug2 + KEYWORD_RELAY);
-    boardConfig.config.board.plug3.pin = Cfg.get(plug3 + KEYWORD_PIN);
-    boardConfig.config.board.plug3.pull_up = Cfg.get(plug3 + KEYWORD_PULL_UP);
-    boardConfig.config.board.plug3.relay = Cfg.get(plug3 + KEYWORD_RELAY);
-    boardConfig.config.board.plug4.pin = Cfg.get(plug4 + KEYWORD_PIN);
-    boardConfig.config.board.plug4.pull_up = Cfg.get(plug4 + KEYWORD_PULL_UP);
-    boardConfig.config.board.plug4.relay = Cfg.get(plug4 + KEYWORD_RELAY);
-    boardConfig.config_version = Cfg.get(KEYWORD_CONFIG_VERSION)
-
     // Update IOT State using msg from Command topic
-    let msg = JSON.stringify(boardConfig);
+    let msg = JSON.stringify(buildBoardConfig());
     print("Sending MQTT message");
     print("--------------------");
     print(stateTopic, '->', msg);
@@ -186,14 +174,43 @@ if (btn >= 0) {
   }, null);
 }
 
+function buildBoardConfig() {
+  let boardConfig = { config_version: Cfg.get(KEYWORD_CONFIG_VERSION), config: { board: {} } };
+  boardConfig.config.board['plug1'] = {};
+  boardConfig.config.board.plug1['pin'] = Cfg.get(plug1 + KEYWORD_PIN);
+  boardConfig.config.board.plug1['pull_up'] = Cfg.get(plug1 + KEYWORD_PULL_UP);
+  boardConfig.config.board.plug1['relay'] = Cfg.get(plug1 + KEYWORD_RELAY);
+  boardConfig.config.board['plug2'] = {};
+  boardConfig.config.board.plug2['pin'] = Cfg.get(plug2 + KEYWORD_PIN);
+  boardConfig.config.board.plug2['pull_up'] = Cfg.get(plug2 + KEYWORD_PULL_UP);
+  boardConfig.config.board.plug2['relay'] = Cfg.get(plug2 + KEYWORD_RELAY);
+  boardConfig.config.board['plug3'] = {};
+  boardConfig.config.board.plug3['pin'] = Cfg.get(plug3 + KEYWORD_PIN);
+  boardConfig.config.board.plug3['pull_up'] = Cfg.get(plug3 + KEYWORD_PULL_UP);
+  boardConfig.config.board.plug3['relay'] = Cfg.get(plug3 + KEYWORD_RELAY);
+  boardConfig.config.board['plug4'] = {};
+  boardConfig.config.board.plug4['pin'] = Cfg.get(plug4 + KEYWORD_PIN);
+  boardConfig.config.board.plug4['pull_up'] = Cfg.get(plug4 + KEYWORD_PULL_UP);
+  boardConfig.config.board.plug4['relay'] = Cfg.get(plug4 + KEYWORD_RELAY);
+  boardConfig.config_version = Cfg.get(KEYWORD_CONFIG_VERSION)
+  return boardConfig;
+}
+
 /**
  * Updating Device Shadow State on mdash.net
  * Updating uptime attribute periodically
  */
-Timer.set(5000, Timer.REPEAT, function() {
-  shadowState.ram_free = Sys.free_ram();
-  shadowState.ram_total = Sys.total_ram();
-  shadowState.uptime = Sys.uptime();
-  shadowState.updated_on = Timer.fmt("%F %X %Z.", Timer.now());
-  Shadow.update(0, shadowState);
+Timer.set(60000, Timer.REPEAT, function () {
+  if (shadowEnabled) {
+    let boardConfig = buildBoardConfig();
+    shadowState.config_version = boardConfig.config_version;
+    shadowState.board = boardConfig.config.board;
+    shadowState.ram_free = Sys.free_ram();
+    shadowState.ram_total = Sys.total_ram();
+    shadowState.uptime = Sys.uptime();
+    shadowState.updated_on = Timer.fmt("%F %X %Z", Timer.now());
+    Shadow.update(0, shadowState);
+  } else {
+    print("Shadowing on mdash.net is not enabled");
+  }
 }, null);

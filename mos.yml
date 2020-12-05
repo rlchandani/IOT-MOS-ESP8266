@@ -10,8 +10,8 @@ mongoose_os_version: ${mos.version}
 config_schema:
   - ["mqtt.server", "iot.eclipse.org:1883"]
   - ["i2c.enable", true]
-  - ["dash.enable", true]
-  - ["dash.token", "Ud1FrY67zQRfL13p2X2jAw"]
+  - ["dash.enable", false]
+  - ["dash.token", "evmibIkctXD05JBvHdeJ2w"]
   - ["wifi.sta.enable", true]
   - ["wifi.sta.ssid", "LittleCedar"]
   - ["wifi.sta.pass", "9000280825"]
@@ -31,7 +31,7 @@ config_schema:
   - ["board.plug4.relay", "s", "S5", {"title": "Plug S4 pin"}]
   - ["board.plug4.pin", "i", 13, {"title": "Plug S4 pin"}]
   - ["board.plug4.pull_up", "b", true, {"title": "Plug S4 pull-up"}]
-  - ["config_version", "i", 0, {"title": "Configuration Version pushed from Google Cloud IOT"}]
+  - ["config_version", "i", 1, {"title": "Configuration Version pushed from Google Cloud IOT"}]
 
 tags:
   - js
